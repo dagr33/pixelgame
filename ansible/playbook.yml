@@ -73,7 +73,7 @@
 
     - name: Copy docker-compose.yml to EC2 host
       copy:
-        src: ../docker-compose.yml
+        src: ../docker-compose.app.yml
         dest: "{{ app_dir }}/docker-compose.yml"
         owner: ubuntu
         group: ubuntu
@@ -83,6 +83,14 @@
       copy:
         src: ../backend/
         dest: "{{ app_dir }}/backend/"
+        owner: ubuntu
+        group: ubuntu
+        mode: preserve
+
+    - name: Copy frontend/ (build context) to EC2 host
+      copy:
+        src: ../frontend/
+        dest: "{{ app_dir }}/frontend/"
         owner: ubuntu
         group: ubuntu
         mode: preserve
