@@ -1,5 +1,37 @@
 # HW15 — The Cloud Bridge
 
+## Architecture
+
+Pixel Siege runs as three independent containers:
+
+```
+Browser
+   |
+   v
+frontend  Nginx :80        (static game + proxies /api/* to backend)
+   |
+   v
+backend   Node/Express :3000 (REST API only, no static files)
+   |
+   v
+db        PostgreSQL :5432
+```
+
+The backend never hardcodes a DB address: it reads `DATABASE_URL`, or
+`DB_HOST`/`DB_PORT`/`POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` from the
+environment. Locally `DB_HOST=db` (the Compose service name); for the AWS
+HW17 split-host layout, set `DB_HOST` to the DB EC2's private IP.
+
+## Local Development (Docker Compose)
+
+```bash
+cp .env.example .env   # then edit POSTGRES_PASSWORD, etc.
+docker compose up -d --build
+docker compose ps
+curl http://localhost/
+curl http://localhost/api/health
+```
+
 ## AWS Setup
 
 - **S3 bucket:** `gdav170-hw15-2508` (us-east-1)

@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -42,8 +41,6 @@ app.use('/api/scores', scoreLimiter, scoresRouter);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
-
-app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
   console.log(`Pixel Siege server listening on port ${PORT}`);
