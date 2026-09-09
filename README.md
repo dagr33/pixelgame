@@ -1,111 +1,361 @@
-# The Last Knight
+HW19 — Compute and Storage Decision
 
-A complete, playable medieval pixel survival game with account registration, persistent scores, profiles, and a leaderboard. The same React UI and shared API logic support two deployment targets.
+Project and HW18 baseline
 
-## Run with Docker (Mac, Windows, Linux)
+Project: The Last Knight
 
-Install and start Docker Desktop, open this project directory in Terminal, then run:
+Provider: AWS
 
-```bash
-docker compose up --build
-```
+Region: eu-west-1
 
-Open **http://localhost:8080**. Create an account, enter the arena, and finish a run to save your score. No npm or database installation is needed on the host. First startup downloads and builds images. Migrations run automatically before the API starts.
+Terraform AWS provider: 5.100.0
 
-For background operation:
+This change extends the project's HW18 Terraform configuration.
+HW18 infrastructure had been destroyed before HW19 began.
+Its configuration was retained; its infrastructure was not recreated.
 
-```bash
-docker compose up --build -d
-docker compose logs -f backend
-```
+Retained HW18 resource definitions:
 
-Stop while preserving the database:
+Resource
 
-```bash
-docker compose down
-```
+Terraform address
 
-The `knight_data` named volume preserves accounts and scores between container restarts. `docker compose down -v` **deletes that database**.
+Configuration
 
-Optional settings: copy `.env.example` to `.env`. Change `APP_PORT` if 8080 is occupied. Before non-local deployment, replace the development database password with a strong URL-safe password and serve behind HTTPS; set `COOKIE_SECURE=true`. The default password is intentionally local-only. PostgreSQL and the backend have no host-published ports. Back up the PostgreSQL volume for real use.
+VPC
 
-## What is included
+aws_vpc.main
 
-- Sword attacks in a forward arc, directional blocking, stamina, dodge, damage invulnerability, drops, soft enemy separation, keyboard and touch controls.
-- Skeletons, goblins, armored knights, and a Warden every fifth wave. Waves become harder; clearing a wave heals 8 HP.
-- A local original pixel-art castle background and procedurally rendered pixel sprites, walking motion, hit flashes, particles, sword arcs and torch flicker. Synthesized sound effects and mute control.
-- Guest practice, registration, sign-in/out, server-side sessions, score saving, personal statistics, the last 20 runs, and the best 100 players (one result each).
-- Pause via Escape/P or the pause button, automatic pause on window blur/tab visibility changes and when switching views.
-- Retry for unsuccessful score saves. Scores belong to the account that started the run; signing in halfway through a guest run does not convert it to a ranked run.
+10.18.0.0/16
 
-## Controls
+Public subnet
 
-| Action | Key |
-|---|---|
-| Move and face | WASD or arrows |
-| Strike | Space; or click to aim and strike |
-| Shield | Hold E |
-| Dodge | Shift |
-| Pause / resume | Escape or P |
+aws_subnet.public_app
 
-Touch devices display movement and action buttons. Main combat is designed for a keyboard. Every enemy kill awards points: skeleton 10, goblin 20, knight 50, Warden 250. A completed wave awards 100 points on transition to the next wave. Potions restore 25 HP.
+10.18.1.0/24, eu-west-1a
 
-## Architecture
+Private subnet A
 
-### Docker target
+aws_subnet.private_db_a
 
-Browser → Nginx/frontend → Express API → PostgreSQL 16.
+10.18.2.0/24, eu-west-1a
 
-- `frontend/`: Vite React SPA entry, Nginx configuration and frontend Dockerfile.
-- `backend/`: Express adapter and PostgreSQL migration runner, separate lockfile and Dockerfile.
-- `lib/server/api.ts`: shared Request/Response API and database-independent parameterized queries.
-- `lib/game/`: TypeScript Canvas 2D engine and shared scoring rules. This implementation uses a small custom canvas engine rather than Phaser.
-- `app/page.tsx`, `app/globals.css`: shared game UI, account forms, leaderboard and profile.
-- `db/migrations/001_postgres.sql`: versioned PostgreSQL schema, applied with an advisory lock and transaction.
+Private subnet B
 
-### Hosted target
+aws_subnet.private_db_b
 
-The online edition uses the bundled Vinext/React application on a Worker with a persistent D1 database. `app/api/[...path]/route.ts` adapts D1 to the same shared API. D1 migrations are generated from `db/schema.ts` and live in `drizzle/`. The hosted database and a local Docker database are separate; accounts and results are not synchronized. The Docker target does not require a Cloudflare account or Sites credentials.
+10.18.3.0/24, eu-west-1b
 
-The source uses React, TypeScript, Canvas 2D, Radix/Shadcn primitives and CSS. PostgreSQL uses direct parameterized SQL, and the hosted schema uses Drizzle; Prisma is not required.
+Application host
 
-## API
+aws_instance.app
 
-All mutation requests require JSON, `X-Knight-Request: 1`, and a same-origin request. Sessions use an HttpOnly, SameSite=Strict cookie (Secure with HTTPS). Passwords use salted PBKDF2-SHA256 at 100,000 iterations. Session tokens are random, stored only as SHA-256 hashes, and expire after seven days. Username/email uniqueness is enforced by the database, including case-insensitive usernames. Password-reset and email verification are not implemented.
+t3.micro
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/api/health` | Database readiness and API health |
-| GET | `/api/me` | Current account |
-| POST | `/api/auth/register` | username, email, password |
-| POST | `/api/auth/login` | email, password |
-| POST | `/api/auth/logout` | Invalidate session |
-| POST | `/api/games/start` | Create an account-owned game |
-| POST | `/api/games/finish` | gameId, wave, duration, kills by enemy type |
-| GET | `/api/leaderboard` | Best 100 and current player's rank |
-| GET | `/api/profile` | Statistics and 20 recent runs |
+Managed database
 
-The API calculates score from the reported enemy counts and completed waves; a supplied score is ignored. It validates duration against server time, complete earlier-wave counts, maximum spawned counts, run ownership, and unique completion. Authentication is limited to 20 attempts per IP per 15-minute window.
+aws_db_instance.postgres
 
-**Anti-cheat limit:** the client simulates combat. Plausibility checks reject obvious modifications, but a determined client can fabricate a plausible run. Competitive public deployment needs server-authoritative simulation or validated replays. The current API accepts waves 1–100; this is a practical MVP limit.
+PostgreSQL 16, db.t4g.micro
 
-## Development and checks
+The database configuration sets publicly_accessible=false and allows
+port 5432 from the application security group.
 
-Requires Node.js 24 for native TypeScript stripping and the SQLite test runner.
+These are configuration facts, not proof of running HW18 resources.
+Application connectivity and continued database privacy could not be
+tested because the HW18 environment was absent.
 
-```bash
-npm ci
-node --experimental-strip-types --test tests/game-api.test.mjs
-npx tsc --noEmit
-npx vite build --config frontend/vite.config.ts
-```
+Storage decision
 
-The hosted build is `npm run build`. Docker builds the standalone SPA, not the Worker. Do not replace one target's database configuration with the other's.
+Purpose: private storage for sanitized The Last Knight release artifacts.
+The only uploaded object is storage-check.txt, containing no sensitive data.
 
-Validation performed: TypeScript checking, hosted production build, Docker frontend production build, and API integration tests using an in-memory SQLite database with the real SQL migration. Tests cover registration, password checking, session cookies, logout, score recomputation, duplicate submission, ownership, expired sessions, leaderboard/profile, cross-origin rejection and rate limits.
+Bucket: pixel-siege-hw19-20260906204812819100000001
 
-The authoring environment has no Docker executable; a full three-container startup and a live PostgreSQL run were not performed there. Browser interaction testing was not performed. No demo users or fake leaderboard entries are included.
+All four S3 Block Public Access settings are enabled.
 
-## Assets
+Access requires an authenticated identity with appropriate IAM permissions.
 
-`public/art/castle.png` is original AI-generated pixel artwork created for this project. The gameplay sprites and sounds are rendered locally by the game engine. No external asset URLs, trackers, or paid services are used by the Docker application.
+No public bucket policy or public ACL was added.
+
+Versioning is enabled.
+
+Default encryption is S3-managed AES256 (SSE-S3).
+
+Noncurrent versions expire after 7 days.
+
+The lifecycle rule does not expire the current object version.
+
+No storage-class transition is configured.
+
+force_destroy=false prevents Terraform from automatically emptying
+the bucket during deletion.
+
+Six Terraform resources manage this single bucket and its test object:
+
+aws_s3_bucket.project_artifacts
+
+aws_s3_bucket_public_access_block.project_artifacts
+
+aws_s3_bucket_versioning.project_artifacts
+
+aws_s3_bucket_server_side_encryption_configuration.project_artifacts
+
+aws_s3_bucket_lifecycle_configuration.project_artifacts
+
+aws_s3_object.storage_check
+
+Compute/bootstrap decision
+
+terraform/scripts/init.sh is a bootstrap candidate that records a UTC
+timestamp and checks whether Docker and psql are installed.
+
+It contains no credentials and performs no package installation.
+The existing compute.tf bootstrap installs Docker and PostgreSQL clients;
+it was not replaced.
+
+The candidate was not attached or applied. No existing EC2 host was
+available for an in-place versus replacement plan comparison.
+No claim is made that a replacement was observed.
+
+The bootstrap candidate and storage verification script have separate roles:
+
+init.sh: harmless checks intended for the application host.
+
+verify-storage.sh: storage checks run locally with Terraform and AWS CLI.
+
+PostgreSQL VM versus RDS
+
+Area
+
+Self-managed PostgreSQL VM
+
+RDS
+
+Patching
+
+We maintain the OS and database
+
+AWS manages infrastructure and provides database maintenance; we manage upgrade choices
+
+Backups
+
+We schedule, retain and test backups
+
+Managed backups are available, but this HW18 configuration disables them with retention=0
+
+Scaling
+
+We manage VM resizing and database changes
+
+Managed instance/storage changes are available; downtime and cost still need review
+
+Private networking
+
+We configure routing, firewall and PostgreSQL access
+
+Private subnets and security groups are configured; public access is disabled
+
+Operations
+
+We handle OS failures, database service and recovery
+
+AWS handles more infrastructure operations; we retain application, access and query responsibilities
+
+Cost
+
+VM, disk, backups and engineering time
+
+Database instance, storage, optional features and usage; less infrastructure administration
+
+RDS is preferable for this project because it reduces routine database
+infrastructure administration. It does not remove responsibility for
+backup configuration, restore testing, access control or application
+compatibility.
+
+Verification results
+
+Check
+
+Observed result
+
+terraform validate
+
+Successful
+
+Baseline HW18 plan
+
+13 additions
+
+Full HW19 plan
+
+19 additions, 0 changes, 0 deletions
+
+S3-only targeted plan
+
+6 additions, 0 changes, 0 deletions
+
+Applied saved plan
+
+6 added, 0 changed, 0 destroyed
+
+Authenticated object read
+
+Successful; expected text returned
+
+Public access block
+
+All four values true
+
+Versioning
+
+Enabled
+
+Default encryption
+
+AES256
+
+Lifecycle
+
+Enabled; NoncurrentDays=7
+
+Anonymous object access
+
+HTTP 403 Forbidden
+
+The applied plan contained only S3 resources, with no VM, database,
+NAT service, load balancer or reserved IP.
+
+Targeting was used exceptionally to verify storage without recreating
+the previously destroyed HW18 environment. A normal full apply would
+also propose recreating the missing HW18 resources.
+
+Commands executed from terraform/:
+
+terraform validate
+terraform plan
+
+terraform plan \
+  -target=aws_s3_bucket.project_artifacts \
+  -target=aws_s3_bucket_public_access_block.project_artifacts \
+  -target=aws_s3_bucket_versioning.project_artifacts \
+  -target=aws_s3_bucket_server_side_encryption_configuration.project_artifacts \
+  -target=aws_s3_bucket_lifecycle_configuration.project_artifacts \
+  -target=aws_s3_object.storage_check \
+  -out=hw19-storage.tfplan
+
+terraform apply "hw19-storage.tfplan"
+
+HW19_BUCKET=$(terraform output -raw hw19_bucket_name)
+
+aws s3 cp "s3://$HW19_BUCKET/storage-check.txt" - \
+  --region eu-west-1
+
+aws s3api get-public-access-block \
+  --bucket "$HW19_BUCKET" --region eu-west-1 --no-cli-pager
+
+aws s3api get-bucket-versioning \
+  --bucket "$HW19_BUCKET" --region eu-west-1 --no-cli-pager
+
+aws s3api get-bucket-encryption \
+  --bucket "$HW19_BUCKET" --region eu-west-1 --no-cli-pager
+
+aws s3api get-bucket-lifecycle-configuration \
+  --bucket "$HW19_BUCKET" --region eu-west-1 --no-cli-pager
+
+aws s3 cp "s3://$HW19_BUCKET/storage-check.txt" - \
+  --region eu-west-1 --no-sign-request
+
+Expected authenticated content:
+
+Pixel Siege release artifact storage check. No sensitive data.
+
+Observed anonymous result:
+
+An error occurred (403) when calling the HeadObject operation: Forbidden
+
+Automated storage verification
+
+The repeatable verification script is located at:
+
+terraform/scripts/verify-storage.sh
+
+Run it from the terraform directory:
+
+bash -n scripts/verify-storage.sh &&
+bash scripts/verify-storage.sh
+
+The script reads the bucket name from Terraform outputs and checks:
+
+Authenticated access returns the expected storage-check.txt content.
+
+All four S3 Block Public Access settings are enabled.
+
+Versioning is Enabled.
+
+Default encryption is AES256.
+
+The enabled expire-old-versions rule specifies 7 noncurrent days.
+
+Anonymous object access returns HTTP 403 or AccessDenied.
+
+Each successful check prints PASS before proceeding to the next check.
+An unexpected command failure or incorrect value stops the script with
+a nonzero exit code.
+
+Anonymous access denial is an expected success. Network errors or other
+unexpected failures are not accepted as proof that public access is blocked.
+
+The script performs read-only AWS operations. It does not create,
+modify or delete cloud resources and contains no credentials.
+It uses the locally configured AWS identity.
+
+The individual manual checks passed. Execution of the automated script
+has not yet been recorded.
+
+Cost and cleanup status
+
+Only one small text object was uploaded. Storage, retained versions and
+requests may incur charges. Small usage does not guarantee zero cost.
+
+Billing alert and current free-tier/credit eligibility verification
+remain to be recorded.
+
+Cleanup is pending instructor review. The planned sequence is:
+
+Remove the test object.
+
+Remove any remaining object versions and delete markers.
+
+Review a destroy plan targeting only the HW19 S3 resources.
+
+Apply that reviewed cleanup plan.
+
+Confirm in AWS that the bucket is gone.
+
+Run terraform state list and terraform plan to record the final state.
+
+Do not run whole-stack terraform destroy.
+
+Exact cleanup commands and observed results will be added after cleanup.
+Retained resource definitions may appear as proposed additions in later
+plans after their resources have been deleted; this is not proof that
+cleanup failed.
+
+Submission status and limitations
+
+Storage creation and manual access checks: completed.
+
+Automated verification execution: not yet recorded.
+
+Bootstrap candidate: intentionally unapplied; no live-host comparison.
+
+Billing/free-tier verification: not yet recorded.
+
+Instructor review and storage cleanup: pending.
+
+HW19 PR merge and Google Sheet submission: pending.
+
+The former HW18 environment was absent during this exercise.
+Preservation of live HW18 resources and unchanged application/database
+connectivity have therefore not been verified.
